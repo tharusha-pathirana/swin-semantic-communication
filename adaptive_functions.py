@@ -5,6 +5,8 @@ import random
 import matplotlib.pyplot as plt
 import os
 import torch
+import numba
+
 
 # ---------------------------
 # Helper Functions
@@ -193,26 +195,154 @@ def draw_patch_boundaries(image, patch_info):
         cv2.rectangle(image_copy, (x, y), (x+w, y+h), (0, 0, 0), 1)
     return image_copy
 
+# def save_patch_info_bin(coord_file, patch_info, rows, cols, original_shape):
+#     """
+#     Saves grid size, original image shape, and valid patch coordinates to a binary file.
+#     """
+#     with open(coord_file, "wb") as f:
+#         np.array([rows, cols], dtype=np.uint16).tofile(f)  # Grid size
+#         np.array(original_shape, dtype=np.uint16).tofile(f)  # Original image shape (H, W, C)
+#         valid_coords = [info['coords'] for info in patch_info if info['coords'][0] >= 0]
+#         np.array(valid_coords, dtype=np.uint16).tofile(f)  # Patch coordinates
+#     print("Saved patch info to", coord_file)
+
+# def load_patch_info_bin(coord_file):
+#     """
+#     Loads grid size, original image shape, and patch coordinates from a binary file.
+#     """
+#     with open(coord_file, "rb") as f:
+#         rows, cols = np.fromfile(f, dtype=np.uint16, count=2)
+#         original_shape = tuple(np.fromfile(f, dtype=np.uint16, count=3))
+#         coords = np.fromfile(f, dtype=np.uint16).reshape(-1, 4)
+#     return coords, rows, cols, original_shape
+
+
+
+
 def save_patch_info_bin(coord_file, patch_info, rows, cols, original_shape):
     """
-    Saves grid size, original image shape, and valid patch coordinates to a binary file.
+    Saves grid size, original image shape, number of valid patches, and patch ratio exponents to a binary file.
+    
+    For each valid patch (where patch_info['coords'][0] >= 0), only one number is saved:
+        r_i = log2(H / h_i)
+    where H is the original image height and h_i is the patch's height.
     """
+    H, W, C = original_shape
+    # Filter valid patches (only those with valid coordinates)
+    valid_patches = [info for info in patch_info if info['coords'][0] >= 0]
+    num_patches = len(valid_patches)
+
+    valid_coords = [info['coords'] for info in patch_info if info['coords'][0] >= 0]
+    
+    # Compute ratio exponent for each valid patch (using h from (x, y, w, h))
+    ratio_exponents = np.array(
+        [int(np.log2(H / info['coords'][3])) for info in valid_patches],
+        dtype=np.uint8
+    )
+
+    
     with open(coord_file, "wb") as f:
-        np.array([rows, cols], dtype=np.uint16).tofile(f)  # Grid size
-        np.array(original_shape, dtype=np.uint16).tofile(f)  # Original image shape (H, W, C)
-        valid_coords = [info['coords'] for info in patch_info if info['coords'][0] >= 0]
-        np.array(valid_coords, dtype=np.uint16).tofile(f)  # Patch coordinates
-    print("Saved patch info to", coord_file)
+        # Save grid size and original image shape
+        np.array([rows, cols], dtype=np.uint16).tofile(f)
+        np.array(original_shape, dtype=np.uint16).tofile(f)
+        # Save number of valid patches
+        np.array([num_patches], dtype=np.uint16).tofile(f)
+        # Save the ratio exponents (1 byte per patch)
+        ratio_exponents.tofile(f)
+    print("Saved minimal patch info to", coord_file)
+
+
+
+
+@numba.njit
+def find_free_region(occupancy, H, W, hi, wi, start_y, start_x):
+    """
+    Scans the occupancy matrix in row-major order starting at (start_y, start_x)
+    and returns the first (y, x) position where the region of size (hi, wi) is free.
+    Returns (-1, -1) if no free region is found.
+    """
+    for y in range(start_y, H - hi + 1):
+        # When starting in the first candidate row, start x from start_x; otherwise from 0.
+        x_start = start_x if y == start_y else 0
+        for x in range(x_start, W - wi + 1):
+            region_free = True
+            for dy in range(hi):
+                for dx in range(wi):
+                    if occupancy[y + dy, x + dx] != 0:
+                        region_free = False
+                        break  # break inner dx loop
+                if not region_free:
+                    break  # break dy loop
+            if region_free:
+                return y, x
+    return -1, -1
+
+@numba.njit
+def mark_region(occupancy, y, x, hi, wi):
+    """
+    Marks the region in the occupancy matrix (of size hi x wi starting at (y, x))
+    as occupied (i.e. sets the region to 1).
+    """
+    for dy in range(hi):
+        for dx in range(wi):
+            occupancy[y + dy, x + dx] = 1
 
 def load_patch_info_bin(coord_file):
     """
-    Loads grid size, original image shape, and patch coordinates from a binary file.
+    Loads grid size, original image shape, number of valid patches, and reconstructs patch coordinates.
+    This version uses Numba to accelerate the inner loops while preserving the exact logic and results.
+    
+    Returns:
+        patch_coords: A NumPy array of shape (num_patches, 4) containing (x, y, wi, hi) for each patch.
+        rows, cols, original_shape
     """
     with open(coord_file, "rb") as f:
+        # Read grid size and original image shape
         rows, cols = np.fromfile(f, dtype=np.uint16, count=2)
         original_shape = tuple(np.fromfile(f, dtype=np.uint16, count=3))
-        coords = np.fromfile(f, dtype=np.uint16).reshape(-1, 4)
-    return coords, rows, cols, original_shape
+        # Read number of valid patches
+        num_patches = np.fromfile(f, dtype=np.uint16, count=1)[0]
+        # Read ratio exponents (one byte each)
+        ratio_exponents = np.fromfile(f, dtype=np.uint8, count=num_patches)
+    
+    H, W, C = original_shape
+    patch_coords = np.zeros((num_patches, 4), dtype=np.uint16)
+    
+    # Create occupancy matrix of the full image size
+    occupancy = np.zeros((H, W), dtype=np.uint8)
+    
+    # Track next scanning start position (to avoid re-scanning from 0,0 every time)
+    next_scan_y, next_scan_x = 0, 0
+    
+    for i, ri in enumerate(ratio_exponents):
+        hi = H // (2 ** ri)
+        wi = W // (2 ** ri)
+        
+        # Use the compiled function to quickly find a free region
+        y, x = find_free_region(occupancy, H, W, hi, wi, next_scan_y, next_scan_x)
+        if y == -1:
+            raise ValueError(f"Unable to place patch {i} with ratio exponent {ri}")
+        
+        # Save the patch coordinate as (x, y, wi, hi)
+        patch_coords[i] = (x, y, wi, hi)
+        
+        # Mark the region as occupied using compiled code
+        mark_region(occupancy, y, x, hi, wi)
+        
+        # Update next scanning position: move right one pixel;
+        # if not enough space remains horizontally, move to the next row.
+        if x + 1 <= W - wi:
+            next_scan_x = x + 1
+            next_scan_y = y
+        else:
+            next_scan_x = 0
+            next_scan_y = y + 1
+    
+    return patch_coords, rows, cols, original_shape
+
+
+
+
 
 def arrange_patches_in_grid_from_info(patch_info, patch_size):
     """
