@@ -493,10 +493,10 @@ def decode_image_adaptive(grid_image_file="patches_grid.png", coord_file="patch_
         reconstructed[y:y+h, x:x+w] = patch_resized
     
     reconstructed_rgb = cv2.cvtColor(reconstructed, cv2.COLOR_BGR2RGB) if len(reconstructed.shape) == 3 else reconstructed
-    plt.figure(figsize=(8,8))
-    plt.imshow(reconstructed_rgb)
-    plt.title("Reconstructed Image from Patches")
-    plt.show()
+    # plt.figure(figsize=(8,8))
+    # plt.imshow(reconstructed_rgb)
+    # plt.title("Reconstructed Image from Patches")
+    # plt.show()
 
     reconstructed_tensor = torch.from_numpy(reconstructed_rgb / 255.0).permute(2, 0, 1).unsqueeze(0).float()
     

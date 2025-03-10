@@ -1894,11 +1894,12 @@ def plot_images(input_image, recon_image, image_name):
 
 # Function to plot a single image
 def plot_single_image(image):
-    plt.figure(figsize=(5, 5))
+    plt.figure(figsize=(10, 10))
 
     # Plot the image
     plt.imshow(transforms.ToPILImage()(image.squeeze(0)))
-    plt.axis('off')
+    plt.title("Reconstructed Image")
+    #plt.axis('off')
 
     # Show the image
     plt.show()
