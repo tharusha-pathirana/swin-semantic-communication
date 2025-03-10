@@ -304,6 +304,8 @@ def load_patch_info_bin(coord_file):
         num_patches = np.fromfile(f, dtype=np.uint16, count=1)[0]
         # Read ratio exponents (one byte each)
         ratio_exponents = np.fromfile(f, dtype=np.uint8, count=num_patches)
+
+    ratio_exponents = ratio_exponents & 0x07  # Keep only the 3 least significant bits (Because H max is 5)
     
     H, W, C = original_shape
     patch_coords = np.zeros((num_patches, 4), dtype=np.uint16)
