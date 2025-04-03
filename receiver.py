@@ -33,6 +33,8 @@ from adaptive_functions import *
 
 import argparse
 
+import warnings
+
 codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
 chunk_size = 4         # 4d vectors in the codebook
 k = 512
@@ -42,6 +44,7 @@ NORMALIZE_CONSTANT = 20
 
 
 
+warnings.filterwarnings("ignore")
 
 
 # save_directories = ["./recon/", "./Binary/Received_Text/", "./Binary/Received_Binary/", "./Binary/Transmitted_Binary/", "./Weights/", "./Datasets/"]
@@ -194,6 +197,7 @@ else:
 
 seed_torch()
 logger = logger_configuration(config, save_log=False)
+logger.disabled = True
 logger.info(config.__dict__)
 torch.manual_seed(seed=config.seed)
 net = SwinJSCC(args, config)
@@ -365,11 +369,11 @@ def main(received_filename, image_path=None, use_codebook=False, resolution=(512
     else:
         decode_and_evaluate(received_filename, image_path, resolution, NORMALIZE_CONSTANT, int_size, adaptive_patch_enabled)
 
-print("Before Main")
+#print("Before Main")
 
 
 if __name__ == "__main__":
-    print("In main")
+    #print("In main")
     parser = argparse.ArgumentParser()
     parser.add_argument("--received_file", required=True)
     parser.add_argument("--image_path", default=None)

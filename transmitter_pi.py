@@ -1,3 +1,9 @@
+import warnings
+import subprocess
+
+warnings.filterwarnings("ignore")
+
+
 import torch.nn as nn
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import torch
@@ -32,9 +38,6 @@ from codebook_functions import *
 from adaptive_functions import *
 
 import argparse
-import warnings
-
-warnings.filterwarnings("ignore")
 
 
 codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
@@ -58,6 +61,23 @@ for save_dir in save_directories:
 torch.backends.cudnn.benchmark = True
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
+
+def capture_image_from_pi_camera(save_path='captured_image.png', timeout_ms=3000):
+    try:
+        # Add a delay to let the camera auto-adjust
+        command = ['libcamera-still', '--encoding', 'png', '-t', str(timeout_ms), '-o', save_path]
+        print(f"Capturing image using libcamera-still with {timeout_ms} ms delay...")
+        subprocess.run(command, check=True)
+        print(f"Image captured and saved to '{save_path}'")
+        return save_path
+    except subprocess.CalledProcessError as e:
+        print("Failed to capture image with libcamera-still.")
+        print(e)
+        exit(1)
+
+
 
 
 
@@ -318,18 +338,33 @@ def main(image_path, img_no, use_codebook=False, adaptive=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image_path", required=True)
+    parser.add_argument("--image_path", default=None, help="Path to image file.")
     parser.add_argument("--img_no", default="01")
     parser.add_argument("--use_codebook", action="store_true")
     parser.add_argument("--adaptive", default=None, help="Set 'true' or 'false' to override threshold. Leave empty to use auto mode.")
+    parser.add_argument("--use_camera", action="store_true", help="Capture image using Pi Camera.")
+
 
     arguments = parser.parse_args()
 
-    main(arguments.image_path, arguments.img_no, arguments.use_codebook, arguments.adaptive)
+    # main(arguments.image_path, arguments.img_no, arguments.use_codebook, arguments.adaptive)
+
+    if arguments.use_camera:
+        image_path = capture_image_from_pi_camera()
+    else:
+        if not arguments.image_path:
+            print("Please provide --image_path or use --use_camera")
+            exit(1)
+        image_path = arguments.image_path
+
+    main(image_path, arguments.img_no, arguments.use_codebook, arguments.adaptive)
+
 
 
 # Codebook mode, auto adaptive
-# python transmitter.py --image_path Datasets/Kodak/kodim23.png --use_codebook
+# python transmitter_pi.py --image_path Datasets/Kodak/kodim23.png --use_codebook
 
 # # No codebook, force adaptive off
-# python transmitter.py --image_path Datasets/Kodak/kodim23.png --adaptive false
+# python transmitter_pi.py --image_path Datasets/Kodak/kodim23.png --adaptive false
+
+#python3 transmitter_pi.py --use_camera --use_codebook
