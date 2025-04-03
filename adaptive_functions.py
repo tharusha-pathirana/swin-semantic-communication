@@ -382,7 +382,7 @@ def arrange_patches_in_grid_from_info(patch_info, patch_size):
 # Encoder Routine
 # ---------------------------
 def encode_image_adaptive(image, kernel_size=1, tl=100, th=200, v=50, H=5, Pm=28, L=192,
-                          grid_image_file="patches_grid.png", coord_file="patch_coords.bin", padding=2):
+                          grid_image_file="patches_grid.png", coord_file="patch_coords.bin", padding=2, *, visualize=True):
     """
     Encoder:
       - Computes adaptive patches using a quadtree.
@@ -435,13 +435,14 @@ def encode_image_adaptive(image, kernel_size=1, tl=100, th=200, v=50, H=5, Pm=28
     cv2.imwrite(grid_image_file, grid_img)
     print("Saved grid image to", grid_image_file)
     save_patch_info_bin(coord_file, patch_info, rows, cols, image.shape)
-    
-    # (Optional) Display the results.
-    grid_img_rgb = cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB) if len(grid_img.shape) == 3 else grid_img
-    plt.figure(figsize=(8,8))
-    plt.imshow(grid_img_rgb)
-    plt.title("Adaptive Patching Grid")
-    plt.show()
+
+    if visualize:
+        # (Optional) Display the results.
+        grid_img_rgb = cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB) if len(grid_img.shape) == 3 else grid_img
+        plt.figure(figsize=(8,8))
+        plt.imshow(grid_img_rgb)
+        plt.title("Adaptive Patching Grid")
+        plt.show()
     
     image_with_boundaries = draw_patch_boundaries(image, patch_info)
     image_with_boundaries_rgb = cv2.cvtColor(image_with_boundaries, cv2.COLOR_BGR2RGB) if len(image_with_boundaries.shape)==3 else image_with_boundaries
