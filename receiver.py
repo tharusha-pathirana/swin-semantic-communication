@@ -19,6 +19,7 @@ import torch.utils.data as data
 import random
 import logging
 import time
+import struct
 
 from datetime import datetime
 import torchvision
@@ -35,7 +36,7 @@ import argparse
 
 import warnings
 
-codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
+#codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
 chunk_size = 4         # 4d vectors in the codebook
 k = 512
 TX_BINARY_BASE_PATH = './Binary/Transmitted_Binary/'
@@ -205,6 +206,21 @@ model_path = "./Weights/SwinJSCC_wo_SAandRA_Rayleigh_HRimage_snr3_psnr_C32.model
 load_weights(model_path)
 net = net.to(device)
 
+def separate_binary_file(combined_file, output_file1, output_file2):
+    # input_path = os.path.join("/kaggle/working", combined_file)  # Adjust input path if needed
+    # output_path1 = os.path.join("/kaggle/working", output_file1)
+    # output_path2 = os.path.join("/kaggle/working", output_file2)   
+    with open(combined_file, "rb") as f:
+        # Read the first 4 bytes to extract metadata (size of first file)
+        size1 = struct.unpack("I", f.read(4))[0]  # Unpack the stored size   
+        # Read actual binary data
+        data1 = f.read(size1)  # Read first file's data
+        data2 = f.read()       # Read remaining data (second file)
+    with open(output_file1, "wb") as f1:
+        f1.write(data1)
+    with open(output_file2, "wb") as f2:
+        f2.write(data2)
+    print(f"File {combined_file} split into {output_file1} and {output_file2}.")
 
 def decode_and_evaluate(received_binary_path, image_path=None, resolution = (512,768), NORMALIZE_CONSTANT = 20, int_size=8, adaptive=False):           # Image path is original image
 
@@ -351,8 +367,11 @@ def decode_indices_and_plot (received_binary_path , codebook_path, image_path=No
     #save_image(recon_image, f"reconstructed_{image_name}")
 
 
-def main(received_filename, image_path=None, use_codebook=False, resolution=(512, 768)):
-    with open(received_filename, "rb") as f:
+def main(received_filename, image_path=None, use_codebook=False, resolution_args=(None, None)):
+    separate_binary_file(received_filename, "patch_coord_received.bin", "image_data_received.bin")
+    received_bin_file = 'image_data_received.bin'
+
+    with open(received_bin_file, "rb") as f:
         flag_byte = f.read(1)
     flag_int = int.from_bytes(flag_byte, byteorder='little')
     bits = [(flag_int >> i) & 1 for i in range(7)]
@@ -361,13 +380,35 @@ def main(received_filename, image_path=None, use_codebook=False, resolution=(512
 
     if adaptive_patch_enabled:
         codebook_path_final = 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy'
+
+        binary_file_path = "patch_coord_received.bin"
+        with open(binary_file_path, "rb") as f:
+            # Read grid size (rows, cols)
+            grid_size = np.fromfile(f, dtype=np.uint16, count=2)
+            rows, cols = grid_size[0], grid_size[1]
+            print(f"Resolution read from file: {rows*32}x{cols*32}")
+        resolution = (rows*32, cols*32)
+    
     else:
         codebook_path_final = 'Codebook/codebook_4d_512clusters_mst.npy'
 
+        binary_file_path = "patch_coord_received.bin"  # Replace with your binary file path
+        with open(binary_file_path, 'rb') as f:
+            data = f.read()
+        resolution_str = data.decode('utf-8')
+        if resolution_str.startswith("Resolution: "):
+            resolution_part = resolution_str[len("Resolution: "):]  # Remove the prefix
+            height, width = map(int, resolution_part.split('x'))  # Split and convert to integers
+            print(f"Resolution read from file: {height}x{width}")
+        resolution = (height,width)
+
+    if resolution_args[0] is not None and resolution_args[1] is not None:
+        resolution = (resolution_args[0], resolution_args[1])
+
     if use_codebook:
-        decode_indices_and_plot(received_filename, codebook_path_final, image_path, chunk_size, resolution, k, adaptive_patch_enabled)
+        decode_indices_and_plot(received_bin_file, codebook_path_final, image_path, chunk_size, resolution, k, adaptive_patch_enabled)
     else:
-        decode_and_evaluate(received_filename, image_path, resolution, NORMALIZE_CONSTANT, int_size, adaptive_patch_enabled)
+        decode_and_evaluate(received_bin_file, image_path, resolution, NORMALIZE_CONSTANT, int_size, adaptive_patch_enabled)
 
 #print("Before Main")
 
@@ -375,14 +416,16 @@ def main(received_filename, image_path=None, use_codebook=False, resolution=(512
 if __name__ == "__main__":
     #print("In main")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--received_file", required=True)
+    parser.add_argument("--received_file", default="combined_binary_received.bin")
     parser.add_argument("--image_path", default=None)
     parser.add_argument("--use_codebook", action="store_true")
-    parser.add_argument("--res_h", type=int, default=512)
-    parser.add_argument("--res_w", type=int, default=768)
+    parser.add_argument("--res_h", type=int, default=None)
+    parser.add_argument("--res_w", type=int, default=None)
     arguments = parser.parse_args()
 
     main(arguments.received_file, arguments.image_path, arguments.use_codebook, (arguments.res_h, arguments.res_w))
 
 
-# python receiver.py --received_file ./Binary/Received_Binary/received_indices.bin --image_path Datasets/Kodak/kodim23.png --use_codebook
+# python receiver.py --received_file combined_binary.bin --image_path Datasets/Kodak/kodim23.png --use_codebook
+
+# python receiver_new.py --received_file combined_binary.bin --image_path Datasets/Kodak/kodim23.png --use_codebook

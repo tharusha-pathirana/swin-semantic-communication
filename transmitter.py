@@ -19,6 +19,7 @@ import torch.utils.data as data
 import random
 import logging
 import time
+import struct
 
 from datetime import datetime
 import torchvision
@@ -37,7 +38,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
+#codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
 chunk_size = 4         # 4d vectors in the codebook
 k = 512
 TX_BINARY_BASE_PATH = './Binary/Transmitted_Binary/'
@@ -196,6 +197,20 @@ else:
     CalcuSSIM = MS_SSIM(data_range=1., levels=4, channel=3).to(device)
 
 
+def combine_binary_files(file1, file2, output_file):
+    # output_path = os.path.join("/kaggle/working", output_file)
+    
+    with open(file1, "rb") as f1, open(file2, "rb") as f2, open(output_file, "wb") as out:
+        data1 = f1.read()
+        data2 = f2.read()      
+        size1 = len(data1)  # Get size of first file        
+        # Store size of first file as metadata (4 bytes for compatibility)
+        out.write(struct.pack("I", size1))  # 'I' stores an unsigned 4-byte integer       
+        # Write actual binary data
+        out.write(data1)
+        out.write(data2)
+    print(f"Files {file1} and {file2} combined into {output_file} with metadata.")
+
 seed_torch()
 logger = logger_configuration(config, save_log=False)
 logger.disabled = True
@@ -244,7 +259,7 @@ def process_and_encode_image_to_binary(image_path, output_path, adaptive_patch_e
         print(f"Encoded feature saved to '{output_path}'")
 
 
-def main(image_path, img_no, use_codebook=False, adaptive=None):
+def main(image_path, use_codebook=False, adaptive=None):
 
     image_size_kb = os.path.getsize(image_path) / 1024
 
@@ -281,6 +296,14 @@ def main(image_path, img_no, use_codebook=False, adaptive=None):
         print("Encoding with codebook...")
         codebook_path = 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy' if adaptive_patch_enabled else 'Codebook/codebook_4d_512clusters_mst.npy'
 
+        if not adaptive_patch_enabled:
+            resolution_data = f"Resolution: {H_image}x{W_image}".encode('utf-8')
+            # Open the binary file in write-binary mode and overwrite it
+            binary_file_path = "patch_coords.bin"  # Replace with your binary file path
+            with open(binary_file_path, 'wb') as f:
+                f.write(resolution_data)
+            print(f"Binary file overwritten with resolution: {H_image}x{W_image}")
+
         bin_path = TX_BINARY_BASE_PATH + "indices.bin"
         indices, _ = encode_image_with_nd_codebook(net, codebook_path, image_path, config, device, chunk_size)
         indices_np = indices.cpu().numpy()
@@ -297,11 +320,23 @@ def main(image_path, img_no, use_codebook=False, adaptive=None):
         bin_file_path = bin_path
 
         print(f"Encoded feature saved to {bin_path}")
+        combine_binary_files("patch_coords.bin", bin_path, "combined_binary.bin")
 
     else:
         print("Encoding without codebook...")
+
+        if not adaptive_patch_enabled:
+            resolution_data = f"Resolution: {H_image}x{W_image}".encode('utf-8')
+            # Open the binary file in write-binary mode and overwrite it
+            binary_file_path = "patch_coords.bin"  # Replace with your binary file path
+            with open(binary_file_path, 'wb') as f:
+                f.write(resolution_data)
+            print(f"Binary file overwritten with resolution: {H_image}x{W_image}")
+        
+
         output_path = TX_BINARY_BASE_PATH + "encoded_feature.bin"
         process_and_encode_image_to_binary(image_path, output_path, adaptive_patch_enabled, NORMALIZE_CONSTANT, int_size)
+        combine_binary_files("patch_coords.bin", output_path, "combined_binary.bin")
         bin_file_path = output_path
     
     # Print image and file size
@@ -319,13 +354,12 @@ def main(image_path, img_no, use_codebook=False, adaptive=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--image_path", required=True)
-    parser.add_argument("--img_no", default="01")
     parser.add_argument("--use_codebook", action="store_true")
     parser.add_argument("--adaptive", default=None, help="Set 'true' or 'false' to override threshold. Leave empty to use auto mode.")
 
     arguments = parser.parse_args()
 
-    main(arguments.image_path, arguments.img_no, arguments.use_codebook, arguments.adaptive)
+    main(arguments.image_path, arguments.use_codebook, arguments.adaptive)
 
 
 # Codebook mode, auto adaptive
@@ -333,3 +367,7 @@ if __name__ == "__main__":
 
 # # No codebook, force adaptive off
 # python transmitter.py --image_path Datasets/Kodak/kodim23.png --adaptive false
+
+# python transmitter_new.py --image_path Datasets/Kodak/kodim23.png --use_codebook
+
+#image_path = "./Datasets/Clic2021/06.png"
