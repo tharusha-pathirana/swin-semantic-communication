@@ -608,7 +608,7 @@ class SwinJSCC_Encoder(nn.Module):
                                qkv_bias=qkv_bias, qk_scale=qk_scale,
                                norm_layer=norm_layer,
                                downsample=PatchMerging if i_layer != 0 else None)
-            print("Encoder ", layer.extra_repr())
+            #print("Encoder ", layer.extra_repr())
             self.layers.append(layer)
         self.norm = norm_layer(embed_dims[-1])
         if C != None:
@@ -873,7 +873,7 @@ class SwinJSCC_Decoder(nn.Module):
                                norm_layer=norm_layer,
                                upsample=PatchReverseMerging)
             self.layers.append(layer)
-            print("Decoder ", layer.extra_repr())
+            #print("Decoder ", layer.extra_repr())
         if C != None:
             self.head_list = nn.Linear(C, embed_dims[0])
         self.apply(self._init_weights)
