@@ -39,12 +39,33 @@ warnings.filterwarnings("ignore")
 
 
 #codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
-chunk_size = 4         # 4d vectors in the codebook
-k = 512
+# chunk_size = 4         # 4d vectors in the codebook
+# k = 512
+
 TX_BINARY_BASE_PATH = './Binary/Transmitted_Binary/'
 int_size = 8
 NORMALIZE_CONSTANT = 20
 
+# codebook_path_wo_adaptive = './Codebook/codebook_4d_512clusters_mst.npy'
+# codebook_path_adaptive = 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy'
+
+# paths --> (chunk_size, k) : {adaptive, wo_adaptive}
+
+codebook_paths = {
+    (4, 512): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_4d_512clusters_mst.npy'
+    },
+    # You can add more predefined paths as needed
+    (2, 256): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_2d_256clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_2d_256clusters_mst.npy'
+    },
+    (8, 1024): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_8d_1024clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_8d_1024clusters_mst.npy'
+    }
+}
 
 
 
@@ -76,7 +97,6 @@ class Args:
 
 # Initialize the arguments
 args = Args()
-
 
 class config():
     seed = 42
@@ -271,7 +291,7 @@ def main(image_path, use_codebook=False, adaptive=None):
 
     H_image, W_image = image.shape[:2]
 
-    H_new, W_new = encode_image_adaptive(image, kernel_size=1,
+    H_new, W_new, data_pixels = encode_image_adaptive(image, kernel_size=1,
                                         tl=100, th=200,
                                         v=50,       # quadtree edge threshold
                                         H=5,        # maximum quadtree depth
@@ -282,7 +302,8 @@ def main(image_path, use_codebook=False, adaptive=None):
     
     
     if adaptive is None:
-        adaptive_patch_enabled = (H_new * W_new) < (0.7 * H_image * W_image)
+        #adaptive_patch_enabled = (H_new * W_new) < (0.7 * H_image * W_image)
+        adaptive_patch_enabled = data_pixels < (0.7 * H_image * W_image)
     else:
         adaptive_patch_enabled = adaptive.lower() == "true"
 
@@ -294,7 +315,8 @@ def main(image_path, use_codebook=False, adaptive=None):
 
     if use_codebook:
         print("Encoding with codebook...")
-        codebook_path = 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy' if adaptive_patch_enabled else 'Codebook/codebook_4d_512clusters_mst.npy'
+        codebook_path = codebook_path_adaptive if adaptive_patch_enabled else codebook_path_wo_adaptive
+        print(f"Using codebook: {codebook_path}")
 
         if not adaptive_patch_enabled:
             resolution_data = f"Resolution: {H_image}x{W_image}".encode('utf-8')
@@ -356,8 +378,18 @@ if __name__ == "__main__":
     parser.add_argument("--image_path", required=True)
     parser.add_argument("--use_codebook", action="store_true")
     parser.add_argument("--adaptive", default=None, help="Set 'true' or 'false' to override threshold. Leave empty to use auto mode.")
+    parser.add_argument("--k", type=int, default=512, help="Number of clusters in the codebook")
+    parser.add_argument("--chunk_size", type=int, default=4, help="Size of vector chunks for quantization")
+
 
     arguments = parser.parse_args()
+
+    k = arguments.k
+    chunk_size = arguments.chunk_size
+
+    key = (chunk_size, k)
+    codebook_path_adaptive = codebook_paths[key]["adaptive"]
+    codebook_path_wo_adaptive = codebook_paths[key]["wo_adaptive"]
 
     main(arguments.image_path, arguments.use_codebook, arguments.adaptive)
 
@@ -371,3 +403,4 @@ if __name__ == "__main__":
 # python transmitter_new.py --image_path Datasets/Kodak/kodim23.png --use_codebook
 
 #image_path = "./Datasets/Clic2021/06.png"
+#image_path = "./Datasets/Div2K/DIV2K_valid_HR/DIV2K_valid_HR/0862.png"

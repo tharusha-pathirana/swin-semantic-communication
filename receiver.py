@@ -37,11 +37,32 @@ import argparse
 import warnings
 
 #codebook_path = './Codebook/codebook_4d_512clusters_mst.npy'
-chunk_size = 4         # 4d vectors in the codebook
-k = 512
+# chunk_size = 4         # 4d vectors in the codebook
+# k = 512
 TX_BINARY_BASE_PATH = './Binary/Transmitted_Binary/'
 int_size = 8
 NORMALIZE_CONSTANT = 20
+
+# codebook_path_wo_adaptive = './Codebook/codebook_4d_512clusters_mst.npy'
+# codebook_path_adaptive = 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy'
+
+# paths --> (chunk_size, k) : {adaptive, wo_adaptive}
+
+codebook_paths = {
+    (4, 512): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_4d_512clusters_mst.npy'
+    },
+    # You can add more predefined paths as needed
+    (2, 256): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_2d_256clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_2d_256clusters_mst.npy'
+    },
+    (8, 1024): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_8d_1024clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_8d_1024clusters_mst.npy'
+    }
+}
 
 
 
@@ -379,7 +400,8 @@ def main(received_filename, image_path=None, use_codebook=False, resolution_args
     print(f"Adaptive Patching Enabled: {adaptive_patch_enabled}")
 
     if adaptive_patch_enabled:
-        codebook_path_final = 'Codebook/adaptive_patching_codebook_4d_512clusters_mst.npy'
+        codebook_path_final = codebook_path_adaptive
+        print(f"Using codebook: {codebook_path_final}")
 
         binary_file_path = "patch_coord_received.bin"
         with open(binary_file_path, "rb") as f:
@@ -390,7 +412,8 @@ def main(received_filename, image_path=None, use_codebook=False, resolution_args
         resolution = (rows*32, cols*32)
     
     else:
-        codebook_path_final = 'Codebook/codebook_4d_512clusters_mst.npy'
+        codebook_path_final = codebook_path_wo_adaptive
+        print(f"Using codebook: {codebook_path_final}")
 
         binary_file_path = "patch_coord_received.bin"  # Replace with your binary file path
         with open(binary_file_path, 'rb') as f:
@@ -421,7 +444,17 @@ if __name__ == "__main__":
     parser.add_argument("--use_codebook", action="store_true")
     parser.add_argument("--res_h", type=int, default=None)
     parser.add_argument("--res_w", type=int, default=None)
+    parser.add_argument("--k", type=int, default=512, help="Number of clusters in the codebook")
+    parser.add_argument("--chunk_size", type=int, default=4, help="Size of vector chunks for quantization")
+
     arguments = parser.parse_args()
+
+    k = arguments.k
+    chunk_size = arguments.chunk_size
+
+    key = (chunk_size, k)
+    codebook_path_adaptive = codebook_paths[key]["adaptive"]
+    codebook_path_wo_adaptive = codebook_paths[key]["wo_adaptive"]
 
     main(arguments.received_file, arguments.image_path, arguments.use_codebook, (arguments.res_h, arguments.res_w))
 

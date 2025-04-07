@@ -381,6 +381,81 @@ def arrange_patches_in_grid_from_info(patch_info, patch_size):
 # ---------------------------
 # Encoder Routine
 # ---------------------------
+# def encode_image_adaptive(image, kernel_size=1, tl=100, th=200, v=50, H=5, Pm=28, L=192,
+#                           grid_image_file="patches_grid.png", coord_file="patch_coords.bin", padding=2, *, visualize=True):
+#     """
+#     Encoder:
+#       - Computes adaptive patches using a quadtree.
+#       - Resizes patches to a fixed size with added padding.
+#       - Pads (or drops) patch_info so that exactly L patches are arranged.
+#       - Arranges patches into a grid whose dimensions are multiples of 128.
+#       - Saves the grid image and patch coordinate info.
+#     """
+#     # Stage 1: Preprocessing
+#     blurred = gaussian_blur(image, kernel_size)
+#     edges = edge_detection(blurred, tl, th)
+    
+#     # Stage 2: Quadtree partitioning
+#     h_img, w_img = edges.shape[:2]
+#     patches_coords = quadtree_partition(edges, 0, 0, w_img, h_img, 0, H, v, min_size=32)
+    
+#     # Stage 3: Sort patches in reading order
+#     sorted_coords = sort_patches_traditional(patches_coords)
+#     #sorted_coords = sort_patches_by_morton(patches_coords)
+    
+#     # Stage 4: Build patch_info list (store coordinates, original patch, and resized (padded) patch)
+#     patch_info = []
+#     for idx, coord in enumerate(sorted_coords):
+#         x, y, w, h = coord
+#         orig_patch = image[y:y+h, x:x+w]
+#         resized_patch = resize_patch(image, coord, Pm, padding)
+#         patch_info.append({
+#             'id': idx,
+#             'coords': coord,
+#             'orig_patch': orig_patch,
+#             'resized_patch': resized_patch
+#         })
+#     print("Number of adaptive patches created:", len(patch_info))
+
+#     if L is None:
+#         L = len(patch_info)
+    
+#     # The effective patch size after padding
+#     effective_patch_size = Pm + 2 * padding
+#     patch_info = drop_last_or_pad_patch_info(patch_info, L, effective_patch_size, image.dtype)
+    
+#     # Stage 5: Arrange patches into a grid.
+#     grid_img, rows, cols = arrange_patches_in_grid_from_info(patch_info, effective_patch_size)
+#     print(f"Final Grid Size: {rows * effective_patch_size} x {cols * effective_patch_size} (Multiple of 128)")
+
+#     H_new = rows * effective_patch_size
+#     W_new = cols * effective_patch_size
+    
+#     # Stage 6: Save grid image and coordinate file.
+#     cv2.imwrite(grid_image_file, grid_img)
+#     print("Saved grid image to", grid_image_file)
+#     save_patch_info_bin(coord_file, patch_info, rows, cols, image.shape)
+
+#     if visualize:
+#         # (Optional) Display the results.
+#         grid_img_rgb = cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB) if len(grid_img.shape) == 3 else grid_img
+#         plt.figure(figsize=(8,8))
+#         plt.imshow(grid_img_rgb)
+#         plt.title("Adaptive Patching Grid")
+#         plt.show()
+    
+#     image_with_boundaries = draw_patch_boundaries(image, patch_info)
+#     image_with_boundaries_rgb = cv2.cvtColor(image_with_boundaries, cv2.COLOR_BGR2RGB) if len(image_with_boundaries.shape)==3 else image_with_boundaries
+#     plt.figure(figsize=(8,8))
+#     plt.imshow(image_with_boundaries_rgb)
+#     plt.title("Original Image with Patch Boundaries")
+#     #plt.show()
+#     plt.show(block=False)
+#     plt.pause(2)  # Display for 2 seconds
+#     plt.close()
+
+#     return H_new, W_new
+
 def encode_image_adaptive(image, kernel_size=1, tl=100, th=200, v=50, H=5, Pm=28, L=192,
                           grid_image_file="patches_grid.png", coord_file="patch_coords.bin", padding=2, *, visualize=True):
     """
@@ -399,6 +474,11 @@ def encode_image_adaptive(image, kernel_size=1, tl=100, th=200, v=50, H=5, Pm=28
     h_img, w_img = edges.shape[:2]
     patches_coords = quadtree_partition(edges, 0, 0, w_img, h_img, 0, H, v, min_size=32)
     
+    min_w = min(p[2] for p in patches_coords)  # p[2] is width
+    min_h = min(p[3] for p in patches_coords)  # p[3] is height
+
+    data_pixels = min_w*min_h*len(patches_coords)
+
     # Stage 3: Sort patches in reading order
     sorted_coords = sort_patches_traditional(patches_coords)
     #sorted_coords = sort_patches_by_morton(patches_coords)
@@ -454,7 +534,8 @@ def encode_image_adaptive(image, kernel_size=1, tl=100, th=200, v=50, H=5, Pm=28
     plt.pause(2)  # Display for 2 seconds
     plt.close()
 
-    return H_new, W_new
+    return H_new, W_new, data_pixels
+
 
 # ---------------------------
 # Decoder Routine
