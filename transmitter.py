@@ -291,21 +291,25 @@ def main(image_path, use_codebook=False, adaptive=None):
 
     H_image, W_image = image.shape[:2]
 
-    H_new, W_new, data_pixels = encode_image_adaptive(image, kernel_size=1,
-                                        tl=100, th=200,
-                                        v=50,       # quadtree edge threshold
-                                        H=5,        # maximum quadtree depth
-                                        Pm=28,      # base patch size before padding
-                                        L=None,     # number of patches in the grid   (If None, it will be set to the number of adaptive patches)
-                                        grid_image_file="patches_grid.png", coord_file="patch_coords.bin",
-                                        padding=2, visualize=False)
-    
-    
-    if adaptive is None:
-        #adaptive_patch_enabled = (H_new * W_new) < (0.7 * H_image * W_image)
-        adaptive_patch_enabled = data_pixels < (0.7 * H_image * W_image)
+    if adaptive is not None and adaptive.lower() == "false":
+        adaptive_patch_enabled = False
     else:
-        adaptive_patch_enabled = adaptive.lower() == "true"
+
+        H_new, W_new, data_pixels = encode_image_adaptive(image, kernel_size=1,
+                                            tl=100, th=200,
+                                            v=50,       # quadtree edge threshold
+                                            H=5,        # maximum quadtree depth
+                                            Pm=28,      # base patch size before padding
+                                            L=None,     # number of patches in the grid   (If None, it will be set to the number of adaptive patches)
+                                            grid_image_file="patches_grid.png", coord_file="patch_coords.bin",
+                                            padding=2, visualize=False)
+        
+    
+        if adaptive is None:
+            #adaptive_patch_enabled = (H_new * W_new) < (0.7 * H_image * W_image)
+            adaptive_patch_enabled = data_pixels < (0.7 * H_image * W_image)
+        else:
+            adaptive_patch_enabled = adaptive.lower() == "true"
 
     print(f"Original Resolution: {H_image} x {W_image}")
     print(f"Adaptive Patch enabled : {adaptive_patch_enabled}")
