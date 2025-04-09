@@ -301,7 +301,7 @@ def decode_and_evaluate(received_binary_path, image_path=None, resolution = (512
         save_image(recon_image, f"reconstructed_patches_grid.png")
 
         reconstructed_image = decode_image_adaptive(grid_image_file="./recon/reconstructed_patches_grid.png",
-                                                    coord_file="patch_coords.bin",Pm=28, padding=2)
+                                                    coord_file="patch_coord_received.bin",Pm=28, padding=2)
         reconstructed_image = reconstructed_image.clamp(0,1)
         
 
@@ -372,7 +372,7 @@ def decode_indices_and_plot (received_binary_path , codebook_path, image_path=No
     else:
         save_image(recon_image, f"reconstructed_patches_grid.png")
         reconstructed_image = decode_image_adaptive(grid_image_file="./recon/reconstructed_patches_grid.png",
-                                                    coord_file="patch_coords.bin",Pm=28, padding=2)
+                                                    coord_file="patch_coord_received.bin",Pm=28, padding=2)
         reconstructed_image = reconstructed_image.clamp(0,1)
 
         if image_path is not None:
