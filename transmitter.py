@@ -295,7 +295,7 @@ def main(image_path, use_codebook=False, adaptive=None):
         adaptive_patch_enabled = False
     else:
 
-        H_new, W_new, data_pixels = encode_image_adaptive(image, kernel_size=1,
+        H_new, W_new, data_pixels, L = encode_image_adaptive(image, kernel_size=1,
                                             tl=100, th=200,
                                             v=50,       # quadtree edge threshold
                                             H=5,        # maximum quadtree depth
@@ -307,7 +307,7 @@ def main(image_path, use_codebook=False, adaptive=None):
     
         if adaptive is None:
             #adaptive_patch_enabled = (H_new * W_new) < (0.7 * H_image * W_image)
-            adaptive_patch_enabled = data_pixels < (0.7 * H_image * W_image)
+            adaptive_patch_enabled = (data_pixels < (0.7 * H_image * W_image)) or (L < 100)
         else:
             adaptive_patch_enabled = adaptive.lower() == "true"
 
