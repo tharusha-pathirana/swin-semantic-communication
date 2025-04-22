@@ -97,7 +97,6 @@ class Args:
 # Initialize the arguments
 args = Args()
 
-
 class config():
     seed = 42
     pass_channel = True
@@ -313,6 +312,7 @@ def decode_and_evaluate(received_binary_path, image_path=None, resolution = (512
             plot_single_image(reconstructed_image)
 
 
+    save_image(reconstructed_image if adaptive else recon_image, f"reconstructed_{image_name if image_path else 'default_image.png'}")
 
     #save_image(recon_image, f"reconstructed_{image_name}")
 
@@ -382,6 +382,7 @@ def decode_indices_and_plot (received_binary_path , codebook_path, image_path=No
         else:
             plot_single_image(reconstructed_image)
 
+    save_image(reconstructed_image if adaptive else recon_image, f"reconstructed_{image_name if image_path else 'default_image.png'}")
 
         
 
