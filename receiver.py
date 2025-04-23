@@ -291,7 +291,7 @@ def decode_and_evaluate(received_binary_path, image_path=None, resolution = (512
             plot_images(input_image, recon_image, image_name)
             #plot_single_image(recon_image)
             print(f"PSNR: {round(psnr_value.item(), 3)} dB")
-            print(f'CBR = {cbr_used}')
+            # print(f'CBR = {cbr_used}')
 
         else:
             plot_single_image(recon_image)
@@ -363,8 +363,8 @@ def decode_indices_and_plot (received_binary_path , codebook_path, image_path=No
             psnr_value = calculate_psnr(input_image, recon_image)
             plot_images(input_image, recon_image, image_name)
             print(f"PSNR: {round(psnr_value.item(), 3)} dB")
-            print('CBR = 1/48')
-            print(f'{chunk_size}d vectors in codebook')
+            # print('CBR = 1/48')
+            # print(f'{chunk_size}d vectors in codebook')
 
         else:
             plot_single_image(recon_image)
