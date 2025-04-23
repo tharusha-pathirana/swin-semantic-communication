@@ -389,7 +389,7 @@ def decode_indices_and_plot (received_binary_path , codebook_path, image_path=No
     #save_image(recon_image, f"reconstructed_{image_name}")
 
 
-def main(received_filename, image_path=None, use_codebook=False, resolution_args=(None, None)):
+def main(received_filename, image_path=None, use_codebook=False, resolution_args=(None, None), adaptive_override=None):
     separate_binary_file(received_filename, "patch_coord_received.bin", "image_data_received.bin")
     received_bin_file = 'image_data_received.bin'
 
@@ -398,6 +398,10 @@ def main(received_filename, image_path=None, use_codebook=False, resolution_args
     flag_int = int.from_bytes(flag_byte, byteorder='little')
     bits = [(flag_int >> i) & 1 for i in range(7)]
     adaptive_patch_enabled = sum(bits) >= 4
+
+    if adaptive_override is not None:
+        adaptive_patch_enabled = adaptive_override.lower() == "true"
+
     print(f"Adaptive Patching Enabled: {adaptive_patch_enabled}")
 
     if adaptive_patch_enabled:
@@ -447,6 +451,8 @@ if __name__ == "__main__":
     parser.add_argument("--res_w", type=int, default=None)
     parser.add_argument("--k", type=int, default=512, help="Number of clusters in the codebook")
     parser.add_argument("--chunk_size", type=int, default=4, help="Size of vector chunks for quantization")
+    parser.add_argument("--adaptive", default=None, choices=["true", "false"],
+                        help="Override adaptive patching detection. Use 'true' or 'false'.")
 
     arguments = parser.parse_args()
 
@@ -457,7 +463,7 @@ if __name__ == "__main__":
     codebook_path_adaptive = codebook_paths[key]["adaptive"]
     codebook_path_wo_adaptive = codebook_paths[key]["wo_adaptive"]
 
-    main(arguments.received_file, arguments.image_path, arguments.use_codebook, (arguments.res_h, arguments.res_w))
+    main(arguments.received_file, arguments.image_path, arguments.use_codebook, (arguments.res_h, arguments.res_w),arguments.adaptive)
 
 
 # python receiver.py --received_file combined_binary.bin --image_path Datasets/Kodak/kodim23.png --use_codebook
