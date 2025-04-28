@@ -1,7 +1,10 @@
+adaptive = '';   % 'true' or 'false' or leave empty ''
+
 % Set argument values
 receivedFile = 'combined_binary.bin';
-imagePath = '';      % Leave '' if you don’t want to save output
-useCodebook = true;
+imagePath = 'Datasets/Kodak/kodim23.png';      % Leave '' if you don’t want to save output
+useCodebook = false;
+
 
 k = 512;             % Optional, set to [] if not used
 chunk = 4;           % Optional, set to [] if not used
@@ -27,6 +30,9 @@ if useCodebook
 end
 if ~isempty(resH) && ~isempty(resW)
     cmd = sprintf('%s --res_h %d --res_w %d', cmd, resH, resW);
+end
+if ~isempty(adaptive)
+    cmd = sprintf('%s --adaptive %s', cmd, adaptive);
 end
 
 [status, output] = system(cmd);
