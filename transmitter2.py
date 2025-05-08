@@ -245,7 +245,7 @@ net = net.to(device)
 
 # Without Codebook
 
-def process_and_encode_image_to_binary(image_path, output_path, adaptive_patch_enabled=False, NORMALIZE_CONSTANT=20, int_size=8):
+def process_and_encode_image_to_binary(image_path, output_path, adaptive_patch_enabled=False, NORMALIZE_CONSTANT=20, int_size=8, patch_size=28):
     
     with torch.no_grad():
         config.isTrain = False
@@ -266,12 +266,35 @@ def process_and_encode_image_to_binary(image_path, output_path, adaptive_patch_e
         if int_size == 8: quantized_feature = np.round(np.clip(feature_np / NORMALIZE_CONSTANT * 127, -127, 127)).astype(np.int8)
         elif int_size == 16: quantized_feature = np.round(np.clip(feature_np / NORMALIZE_CONSTANT * 32767, -32767, 32767)).astype(np.int16)
 
-        # Prepare adaptive flag byte (7 redundant bits)
-        bit_value = 1 if adaptive_patch_enabled else 0
-        flag_byte = np.array([sum([bit_value << i for i in range(7)])], dtype=np.uint8)
 
-        # Save flag byte and then quantized feature (append mode)
-        flag_byte.tofile(output_path)
+
+        # Byte 1: adaptive flag (7-bit redundant)
+        adaptive_flag_byte = 0b01111111 if adaptive_patch_enabled else 0b00000000
+
+        # Byte 2: use codebook flag (always 0 here)
+        use_codebook_flag_byte = 0b00000000
+
+        # Byte 3: chunk size byte (set to 0 or a default, e.g., 2 → 01 → 000 111)
+        chunk_byte = int('00000111', 2)  # Represents default "2" as 000 111 (unused for non-codebook)
+
+        # Byte 4: codebook k size byte (set to 0 or a default, e.g., 256 → 000 111)
+        k_byte = int('00000111', 2)  # Represents default "256" as 000 111 (unused for non-codebook)
+
+        # Byte 5: patch size flag (based on patch_size)
+        patch_flag_byte = 0b01111111 if patch_size == 60 else 0b00000000  # 0 for 28, 1 for 60
+
+        # Combine into byte array
+        flag_bytes = np.array([
+            adaptive_flag_byte,
+            use_codebook_flag_byte,
+            chunk_byte,
+            k_byte,
+            patch_flag_byte
+        ], dtype=np.uint8)
+
+        # Save flag bytes + quantized feature
+        flag_bytes.tofile(output_path)
+
 
         with open(output_path, "ab") as f:
             quantized_feature.tofile(f)
@@ -292,8 +315,22 @@ def main(image_path, use_codebook=False, adaptive=None):
 
     H_image, W_image = image.shape[:2]
 
-    if H_image > 3000 or W_image > 3000: depth = 6 
-    else : depth = 5
+    if H_image > 3000 or W_image > 3000: 
+        depth = 6 
+        low_t,high_t = 300,400
+        patch_size = 60
+        v_val = 100
+    else : 
+        depth = 5
+        low_t,high_t = 100,200
+        patch_size = 28
+        v_val = 50
+
+
+    if arguments.depth is not None:
+        depth = arguments.depth
+    if arguments.patch_size is not None:
+        patch_size = arguments.patch_size
 
     print("Quadtree depth: ", depth)
 
@@ -302,10 +339,10 @@ def main(image_path, use_codebook=False, adaptive=None):
     else:
 
         H_new, W_new, data_pixels, L = encode_image_adaptive(image, kernel_size=1,
-                                            tl=100, th=200,
-                                            v=50,       # quadtree edge threshold
-                                            H=5,        # maximum quadtree depth
-                                            Pm=28,      # base patch size before padding
+                                            tl=low_t, th=high_t,  # 100,200
+                                            v=v_val,       # quadtree edge threshold
+                                            H=depth,        # maximum quadtree depth
+                                            Pm=patch_size,      # base patch size before padding
                                             L=None,     # number of patches in the grid   (If None, it will be set to the number of adaptive patches)
                                             grid_image_file="patches_grid.png", coord_file="patch_coords.bin",
                                             padding=2, visualize=False)
@@ -340,8 +377,52 @@ def main(image_path, use_codebook=False, adaptive=None):
         indices, _ = encode_image_with_nd_codebook(net, codebook_path, image_path, config, device, chunk_size)
         indices_np = indices.cpu().numpy()
 
-        flag_byte = np.array([sum([1 << i for i in range(7)]) if adaptive_patch_enabled else 0], dtype=np.uint8)
-        flag_byte.tofile(bin_path)
+
+        # --- Adaptive flag byte ---
+        adaptive_flag_byte = 0b01111111 if adaptive_patch_enabled else 0b00000000
+
+        # --- Use codebook flag byte ---
+        use_codebook_flag_byte = 0b01111111 if use_codebook else 0b00000000
+
+        if chunk_size == 2:
+            chunk_bit1, chunk_bit2 = '0', '1'
+        elif chunk_size == 4:
+            chunk_bit1, chunk_bit2 = '1', '0'
+        elif chunk_size == 8:
+            chunk_bit1, chunk_bit2 = '1', '1'
+        else:
+            raise ValueError(f"Unsupported chunk size: {chunk_size}")
+        
+        # Build: XX|bit1bit1bit1|bit2bit2bit2  (total 8 bits)
+        chunk_byte_str = '00' + (chunk_bit1 * 3) + (chunk_bit2 * 3)
+        chunk_byte = int(chunk_byte_str, 2)
+
+        # --- Codebook size (k) encoding ---
+        if k == 256:
+            k_bit1, k_bit2 = '0', '1'
+        elif k == 512:
+            k_bit1, k_bit2 = '1', '0'
+        elif k == 1024:
+            k_bit1, k_bit2 = '1', '1'
+        else:
+            raise ValueError(f"Unsupported codebook size: {k}")
+
+        k_byte_str = '00' + (k_bit1 * 3) + (k_bit2 * 3)
+        k_byte = int(k_byte_str, 2)
+
+        # --- Patch size flag byte ---
+        patch_flag_byte = 0b01111111 if patch_size == 60 else 0b00000000 #  0 for 28, 1 for 60
+
+        flag_bytes = np.array([
+                    adaptive_flag_byte,
+                    use_codebook_flag_byte,
+                    chunk_byte,
+                    k_byte,
+                    patch_flag_byte
+                ], dtype=np.uint8)
+        
+        
+        flag_bytes.tofile(bin_path)
 
         with open(bin_path, "ab") as f:
             if k > 256:
@@ -398,6 +479,10 @@ if __name__ == "__main__":
     parser.add_argument("--adaptive", default=None, help="Set 'true' or 'false' to override threshold. Leave empty to use auto mode.")
     parser.add_argument("--k", type=int, default=512, help="Number of clusters in the codebook")
     parser.add_argument("--chunk_size", type=int, default=4, help="Size of vector chunks for quantization")
+    parser.add_argument("--patch_size", type=int, choices=[28, 60], default=None,
+                        help="Override patch size; choices are 28 or 60")
+    parser.add_argument("--depth", type=int, choices=[5, 6], default=None,
+                        help="Override quadtree depth; choices are 5 or 6")
 
 
     arguments = parser.parse_args()
@@ -422,3 +507,5 @@ if __name__ == "__main__":
 
 #image_path = "./Datasets/Clic2021/06.png"
 #image_path = "./Datasets/Div2K/DIV2K_valid_HR/DIV2K_valid_HR/0862.png"
+
+# python transmitter2.py --image_path Datasets/Wildlife/leopard2.png --use_codebook --depth 5

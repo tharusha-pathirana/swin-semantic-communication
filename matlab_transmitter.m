@@ -1,6 +1,6 @@
 % Set argument values
 imagePath = 'Datasets/Kodak/kodim23.png';
-useCodebook = true;
+useCodebook = false;
 
 k = 512;               % Set to [] if not needed
 chunk = 4;             % Set to [] if not needed

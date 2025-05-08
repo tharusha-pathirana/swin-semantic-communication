@@ -532,6 +532,7 @@ def encode_image_adaptive(image, kernel_size=1, tl=100, th=200, v=50, H=5, Pm=28
     #plt.show()
     plt.show(block=False)
     plt.pause(2)  # Display for 2 seconds
+    plt.savefig("patch_boundaries.png")
     plt.close()
 
     return H_new, W_new, data_pixels, L

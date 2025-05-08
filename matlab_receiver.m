@@ -2,8 +2,8 @@ adaptive = '';   % 'true' or 'false' or leave empty ''
 
 % Set argument values
 receivedFile = 'combined_binary.bin';
-imagePath = 'Datasets/Kodak/kodim23.png';      % Leave '' if you don’t want to save output
-useCodebook = false;
+imagePath = 'Datasets/Kodak/kodim15.png';      % Leave '' if you don’t want to save output
+useCodebook = true;   % true / false
 
 
 k = 512;             % Optional, set to [] if not used

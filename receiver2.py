@@ -93,7 +93,7 @@ class Args:
         self.testset = 'kodak'  # Choices: ['kodak', 'CLIC21', 'ffhq']
         self.distortion_metric = 'MSE'  # Choices: ['MSE', 'MS-SSIM']
         self.model = 'SwinJSCC_w/o_SAandRA'  # Choices: ['SwinJSCC_w/o_SAandRA', 'SwinJSCC_w/_SA', 'SwinJSCC_w/_RA', 'SwinJSCC_w/_SAandRA']
-        self.channel_type = 'rayleigh'  # Choices: ['awgn', 'rayleigh']
+        self.channel_type = 'awgn'  # Choices: ['awgn', 'rayleigh']
         self.C = '32'  # Bottleneck dimension, any string/number value can be set (32 = 1/48, 64 = 1/24, 96 = 1/16, 128 = 1/12)
         self.multiple_snr = '3'  # Random or fixed SNR, set as string (e.g., '10')
         self.model_size = 'base'  # Choices: ['small', 'base', 'large']
@@ -405,7 +405,7 @@ def decode_and_evaluate(received_binary_path, image_path=None, resolution = (512
     #     recovered_feature = received_feature / 32767 * NORMALIZE_CONSTANT
 
     with open(received_binary_path, "rb") as f:
-        _ = f.read(1)  # Skip adaptive flag byte
+        _ = f.read(5)  # Skip adaptive flag byte
 
         if int_size == 8:
             received_feature = np.frombuffer(f.read(), dtype=np.int8).reshape(tensor_shape)
@@ -450,7 +450,7 @@ def decode_and_evaluate(received_binary_path, image_path=None, resolution = (512
         save_image(recon_image, f"reconstructed_patches_grid.png")
 
         reconstructed_image = decode_image_adaptive(grid_image_file="./recon/reconstructed_patches_grid.png",
-                                                    coord_file="patch_coord_received.bin",Pm=28, padding=2)
+                                                    coord_file="patch_coord_received.bin",Pm=patch_size, padding=2)
         reconstructed_image = reconstructed_image.clamp(0,1)
         
 
@@ -488,14 +488,13 @@ def decode_and_evaluate(received_binary_path, image_path=None, resolution = (512
     #save_image(recon_image, f"reconstructed_{image_name}")
 
 
-
 def decode_indices_and_plot (received_binary_path , codebook_path, image_path=None ,chunk_size=4 ,resolution = (512,768), k=512, adaptive=False):
 
     # if k > 256: loaded_indices = np.fromfile(received_binary_path, dtype=np.uint16)   # Use the same dtype as during saving
     # else: loaded_indices = np.fromfile(received_binary_path, dtype=np.uint8)
 
     with open(received_binary_path, "rb") as f:
-        _ = f.read(1)  # Skip the first byte (flag already read outside)
+        _ = f.read(5)  # Skip the first byte (flag already read outside)
 
         if k > 256:
             loaded_indices = np.frombuffer(f.read(), dtype=np.uint16)
@@ -546,7 +545,7 @@ def decode_indices_and_plot (received_binary_path , codebook_path, image_path=No
     else:
         save_image(recon_image, f"reconstructed_patches_grid.png", grid_image_base_path)
         reconstructed_image = decode_image_adaptive(grid_image_file="./recon/reconstructed_patches_grid.png",
-                                                    coord_file="patch_coord_received.bin",Pm=28, padding=2)
+                                                    coord_file="patch_coord_received.bin",Pm=patch_size, padding=2)
         reconstructed_image = reconstructed_image.clamp(0,1)
 
         if image_path is not None:
@@ -581,37 +580,81 @@ def decode_indices_and_plot (received_binary_path , codebook_path, image_path=No
 
     #save_image(recon_image, f"reconstructed_{image_name}")
 
+def majority(bits):
+    return int(sum(bits) >= (len(bits) / 2))
+
+def decode_redundant_byte(byte_val, method="7bit"):
+    if method == "7bit":
+        bits = [(byte_val >> i) & 1 for i in range(7)]
+        return majority(bits)
+    elif method == "2bit_3x":
+        bit1_group = [(byte_val >> i) & 1 for i in range(5, 2, -1)]  # bits 5,4,3
+        bit2_group = [(byte_val >> i) & 1 for i in range(2, -1, -1)]  # bits 2,1,0
+        bit1 = majority(bit1_group)
+        bit2 = majority(bit2_group)
+        return f"{bit1}{bit2}"
+    else:
+        raise ValueError("Unknown decode method")
 
 def main(received_filename, image_path=None, use_codebook=False, resolution_args=(None, None), adaptive_override=None):
-    separate_binary_file(received_filename, "patch_coord_received.bin", "image_data_received.bin")
+    # separate_binary_file(received_filename, "patch_coord_received.bin", "image_data_received.bin")
     received_bin_file = 'image_data_received.bin'
 
+    # with open(received_bin_file, "rb") as f:
+    #     flag_byte = f.read(1)
+    # flag_int = int.from_bytes(flag_byte, byteorder='little')
+    # bits = [(flag_int >> i) & 1 for i in range(7)]
+    # adaptive_patch_enabled = sum(bits) >= 4
+
+    # --- Read 5 control bytes ---
     with open(received_bin_file, "rb") as f:
-        flag_byte = f.read(1)
-    flag_int = int.from_bytes(flag_byte, byteorder='little')
-    bits = [(flag_int >> i) & 1 for i in range(7)]
-    adaptive_patch_enabled = sum(bits) >= 4
+        flag_bytes = f.read(5)
+
+    adaptive_patch_enabled = bool(decode_redundant_byte(flag_bytes[0], "7bit"))
+    _ = bool(decode_redundant_byte(flag_bytes[1], "7bit"))
+    _ = decode_redundant_byte(flag_bytes[2], "2bit_3x")
+    _ = decode_redundant_byte(flag_bytes[3], "2bit_3x")
+    _ = bool(decode_redundant_byte(flag_bytes[4], "7bit"))
 
     if adaptive_override is not None:
         adaptive_patch_enabled = adaptive_override.lower() == "true"
 
+    
+
+    #print(f"Adaptive Patching Enabled: {adaptive_patch_enabled}")
+    print(f"Codebook Enabled: {use_codebook}")
+    if use_codebook:
+        print(f"Chunk Size: {chunk_size}")
+        print(f"Codebook k Size: {k}")
+    
+
     print(f"Adaptive Patching Enabled: {adaptive_patch_enabled}")
+    if adaptive_patch_enabled:
+        print(f"Patch Size: {patch_size}")
 
     if adaptive_patch_enabled:
         codebook_path_final = codebook_path_adaptive
-        print(f"Using codebook: {codebook_path_final}")
+        #print(f"Using codebook: {codebook_path_final}")
 
         binary_file_path = "patch_coord_received.bin"
         with open(binary_file_path, "rb") as f:
             # Read grid size (rows, cols)
             grid_size = np.fromfile(f, dtype=np.uint16, count=2)
             rows, cols = grid_size[0], grid_size[1]
-            print(f"Resolution read from file: {rows*32}x{cols*32}")
-        resolution = (rows*32, cols*32)
+
+            effective_patch_size = patch_size + 2 * 2
+            print(f"Resolution read from file: {rows * effective_patch_size}x{cols * effective_patch_size}")
+
+        resolution = (rows * effective_patch_size, cols * effective_patch_size)
+
+        #     print(f"Resolution read from file: {rows*32}x{cols*32}")
+        # resolution = (rows*32, cols*32)
+
+
     
     else:
         codebook_path_final = codebook_path_wo_adaptive
-        print(f"Using codebook: {codebook_path_final}")
+        #print(f"Using codebook: {codebook_path_final}")
 
         binary_file_path = "patch_coord_received.bin"  # Replace with your binary file path
         with open(binary_file_path, 'rb') as f:
@@ -639,26 +682,78 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--received_file", default="combined_binary_received.bin")
     parser.add_argument("--image_path", default=None)
-    parser.add_argument("--use_codebook", action="store_true")
+    parser.add_argument("--use_codebook", type=str, choices=["true", "false"], default=None, help="Use codebook (If giving manually)")
     parser.add_argument("--res_h", type=int, default=None)
     parser.add_argument("--res_w", type=int, default=None)
-    parser.add_argument("--k", type=int, default=512, help="Number of clusters in the codebook")
-    parser.add_argument("--chunk_size", type=int, default=4, help="Size of vector chunks for quantization")
+    parser.add_argument("--k", type=int, default=None, help="Override number of clusters in the codebook")
+    parser.add_argument("--chunk_size", type=int, default=None, help="Override size of vector chunks for quantization")
     parser.add_argument("--adaptive", default=None, choices=["true", "false"],
                         help="Override adaptive patching detection. Use 'true' or 'false'.")
+    parser.add_argument("--patch_size", type=int, choices=[28, 60], default=None,
+                    help="Override patch size; choices are 28 or 60")
+
 
     arguments = parser.parse_args()
 
-    k = arguments.k
-    chunk_size = arguments.chunk_size
+    separate_binary_file(arguments.received_file, "patch_coord_received.bin", "image_data_received.bin")
+    received_bin_file = 'image_data_received.bin'
+
+    # --- Decode 5 control bytes BEFORE main ---
+    with open(received_bin_file, "rb") as f:
+        flag_bytes = f.read(5)
+
+    _ = bool(decode_redundant_byte(flag_bytes[0], "7bit"))
+    codebook_enabled = bool(decode_redundant_byte(flag_bytes[1], "7bit"))
+    chunk_bits = decode_redundant_byte(flag_bytes[2], "2bit_3x")
+    k_bits = decode_redundant_byte(flag_bytes[3], "2bit_3x")
+    patch_size_flag = bool(decode_redundant_byte(flag_bytes[4], "7bit"))
+
+    # --- Resolve final chunk_size ---
+    if arguments.chunk_size is not None:
+        chunk_size = arguments.chunk_size
+    else:
+        if chunk_bits == "01":
+            chunk_size = 2
+        elif chunk_bits == "10":
+            chunk_size = 4
+        elif chunk_bits == "11":
+            chunk_size = 8
+        else:
+            chunk_size = 4 # Default value if decoding fails
+
+    # --- Resolve final k ---
+    if arguments.k is not None:
+        k = arguments.k
+    else:
+        if k_bits == "01":
+            k = 256
+        elif k_bits == "10":
+            k = 512
+        elif k_bits == "11":
+            k = 1024
+        else:
+            k = 512 # Default value if decoding fails
+
+    if arguments.use_codebook is not None:
+        use_codebook = arguments.use_codebook.lower() == "true"
+    else:   
+        use_codebook = codebook_enabled
+
+    if arguments.patch_size is not None:
+        patch_size = arguments.patch_size
+    else:
+        patch_size = 60 if patch_size_flag else 28
+
 
     key = (chunk_size, k)
     codebook_path_adaptive = codebook_paths[key]["adaptive"]
     codebook_path_wo_adaptive = codebook_paths[key]["wo_adaptive"]
 
-    main(arguments.received_file, arguments.image_path, arguments.use_codebook, (arguments.res_h, arguments.res_w),arguments.adaptive)
+    main(arguments.received_file, arguments.image_path, use_codebook, (arguments.res_h, arguments.res_w),arguments.adaptive)
 
 
 # python receiver.py --received_file combined_binary.bin --image_path Datasets/Kodak/kodim23.png --use_codebook
 
 # python receiver_new.py --received_file combined_binary.bin --image_path Datasets/Kodak/kodim23.png --use_codebook
+
+# python receiver2.py --received_file combined_binary.bin --image_path Datasets/Wildlife/leopard2.png  

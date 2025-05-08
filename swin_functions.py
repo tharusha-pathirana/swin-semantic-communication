@@ -1830,8 +1830,12 @@ def decode_image(noisy_feature, net, chan_snr, resolution=(512,768)):
     return recon_image
 
 
-def save_image(image, filename):
-    torchvision.utils.save_image(image, os.path.join("./recon/", filename))
+# def save_image(image, filename):
+#     torchvision.utils.save_image(image, os.path.join("./recon/", filename))
+
+def save_image(image, filename, base_path="./recon/"):
+    os.makedirs(base_path, exist_ok=True)
+    torchvision.utils.save_image(image, os.path.join(base_path, filename))
 
 
 def load_single_image(image_path, config):
