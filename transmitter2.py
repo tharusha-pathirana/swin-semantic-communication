@@ -314,16 +314,21 @@ def main(image_path, use_codebook=False, adaptive=None):
     image = cv2.cvtColor(resized_image_np, cv2.COLOR_RGB2BGR)
 
     H_image, W_image = image.shape[:2]
+    patch_size = 28
+
+    ref_dim = H_image if H_image >= W_image else W_image
+
+    depth = round(math.log2(ref_dim / 32))
 
     if H_image > 3000 or W_image > 3000: 
-        depth = 6 
-        low_t,high_t = 300,400
-        patch_size = 60
+        # depth = 6 
+        low_t,high_t = 100,200
+        # patch_size = 60
         v_val = 100
     else : 
-        depth = 5
+        # depth = 5
         low_t,high_t = 100,200
-        patch_size = 28
+        # patch_size = 28
         v_val = 50
 
 
@@ -342,7 +347,7 @@ def main(image_path, use_codebook=False, adaptive=None):
                                             tl=low_t, th=high_t,  # 100,200
                                             v=v_val,       # quadtree edge threshold
                                             H=depth,        # maximum quadtree depth
-                                            Pm=patch_size,      # base patch size before padding
+                                            Pm=patch_size,      # base patch size before padding  # Pm=patch_size
                                             L=None,     # number of patches in the grid   (If None, it will be set to the number of adaptive patches)
                                             grid_image_file="patches_grid.png", coord_file="patch_coords.bin",
                                             padding=2, visualize=False)
@@ -350,7 +355,7 @@ def main(image_path, use_codebook=False, adaptive=None):
     
         if adaptive is None:
             #adaptive_patch_enabled = (H_new * W_new) < (0.7 * H_image * W_image)
-            adaptive_patch_enabled = (data_pixels < (0.8 * H_image * W_image)) or (L < 100)
+            adaptive_patch_enabled = ((data_pixels < (0.8 * H_image * W_image)) or (L < 100)) and ((H_new * W_new) < (H_image * W_image))
         else:
             adaptive_patch_enabled = adaptive.lower() == "true"
 

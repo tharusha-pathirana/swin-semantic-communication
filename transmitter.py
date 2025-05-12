@@ -292,8 +292,11 @@ def main(image_path, use_codebook=False, adaptive=None):
 
     H_image, W_image = image.shape[:2]
 
-    if H_image > 3000 or W_image > 3000: depth = 6 
-    else : depth = 5
+    ref_dim = H_image if H_image >= W_image else W_image
+    depth = round(math.log2(ref_dim / 32))
+
+    # if H_image > 3000 or W_image > 3000: depth = 6 
+    # else : depth = 5
 
     print("Quadtree depth: ", depth)
 
@@ -304,7 +307,7 @@ def main(image_path, use_codebook=False, adaptive=None):
         H_new, W_new, data_pixels, L = encode_image_adaptive(image, kernel_size=1,
                                             tl=100, th=200,
                                             v=50,       # quadtree edge threshold
-                                            H=5,        # maximum quadtree depth
+                                            H=depth,        # maximum quadtree depth
                                             Pm=28,      # base patch size before padding
                                             L=None,     # number of patches in the grid   (If None, it will be set to the number of adaptive patches)
                                             grid_image_file="patches_grid.png", coord_file="patch_coords.bin",
@@ -313,7 +316,7 @@ def main(image_path, use_codebook=False, adaptive=None):
     
         if adaptive is None:
             #adaptive_patch_enabled = (H_new * W_new) < (0.7 * H_image * W_image)
-            adaptive_patch_enabled = (data_pixels < (0.8 * H_image * W_image)) or (L < 100)
+            adaptive_patch_enabled = ((data_pixels < (0.8 * H_image * W_image)) or (L < 100)) and ((H_new * W_new) < (H_image * W_image))
         else:
             adaptive_patch_enabled = adaptive.lower() == "true"
 
