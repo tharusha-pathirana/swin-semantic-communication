@@ -294,6 +294,7 @@ def main(image_path, use_codebook=False, adaptive=None):
 
     ref_dim = H_image if H_image >= W_image else W_image
     depth = round(math.log2(ref_dim / 32))
+    depth = min(depth, 7)  # Limit depth to a maximum of 7
 
     # if H_image > 3000 or W_image > 3000: depth = 6 
     # else : depth = 5
