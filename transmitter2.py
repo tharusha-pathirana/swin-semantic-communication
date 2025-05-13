@@ -303,6 +303,31 @@ def process_and_encode_image_to_binary(image_path, output_path, adaptive_patch_e
         print(f"Encoded feature saved to '{output_path}'")
 
 
+def prepare_image_path(original_path):
+
+    MAX_DIM = 3500  # Change this value easily if needed
+
+    ext = os.path.splitext(original_path)[-1].lower()
+    with Image.open(original_path) as img:
+        w, h = img.size
+        needs_conversion = ext in [".jpg", ".jpeg", ".dng"]
+        needs_resize = max(w, h) > MAX_DIM
+
+        if needs_conversion or needs_resize:
+            scale = MAX_DIM / max(w, h) if needs_resize else 1.0
+            new_size = (int(w * scale), int(h * scale)) if needs_resize else (w, h)
+
+            if needs_resize:
+                img = img.resize(new_size, Image.LANCZOS)
+
+            temp_path = "image.png"
+            img.save(temp_path, format="PNG")
+            # print(f"Image processed and saved to {temp_path} with size {new_size}")
+            return temp_path
+        else:
+            return original_path
+
+
 def main(image_path, use_codebook=False, adaptive=None):
 
     image_size_kb = os.path.getsize(image_path) / 1024
@@ -487,8 +512,8 @@ if __name__ == "__main__":
     parser.add_argument("--chunk_size", type=int, default=4, help="Size of vector chunks for quantization")
     parser.add_argument("--patch_size", type=int, choices=[28, 60], default=None,
                         help="Override patch size; choices are 28 or 60")
-    parser.add_argument("--depth", type=int, choices=[5, 6], default=None,
-                        help="Override quadtree depth; choices are 5 or 6")
+    parser.add_argument("--depth", type=int, choices=[4, 5, 6, 7], default=None,
+                        help="Override quadtree depth; choices are 4, 5, 6 or 7")
 
 
     arguments = parser.parse_args()
@@ -500,7 +525,9 @@ if __name__ == "__main__":
     codebook_path_adaptive = codebook_paths[key]["adaptive"]
     codebook_path_wo_adaptive = codebook_paths[key]["wo_adaptive"]
 
-    main(arguments.image_path, arguments.use_codebook, arguments.adaptive)
+    processed_path = prepare_image_path(arguments.image_path)
+
+    main(processed_path, arguments.use_codebook, arguments.adaptive)
 
 
 # Codebook mode, auto adaptive
