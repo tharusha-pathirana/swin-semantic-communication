@@ -65,6 +65,14 @@ codebook_paths = {
     (8, 1024): {
         "adaptive": 'Codebook/adaptive_patching_codebook_8d_1024clusters_mst.npy',
         "wo_adaptive": './Codebook/codebook_8d_1024clusters_mst.npy'
+    },
+    (4, 1024): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_4d_1024clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_4d_1024clusters_mst.npy'
+    },
+    (2, 512): {
+        "adaptive": 'Codebook/adaptive_patching_codebook_2d_512clusters_mst.npy',
+        "wo_adaptive": './Codebook/codebook_2d_512clusters_mst.npy'
     }
 }
 
@@ -614,7 +622,10 @@ def prepare_image_path(original_path):
             if needs_resize:
                 img = img.resize(new_size, Image.LANCZOS)
 
-            temp_path = "image.png"
+            base_name = os.path.splitext(os.path.basename(original_path))[0]
+            temp_path = f"{base_name}.png"
+
+            # temp_path = "image.png"
             img.save(temp_path, format="PNG")
             # print(f"Image processed and saved to {temp_path} with size {new_size}")
             return temp_path
