@@ -595,6 +595,32 @@ def decode_redundant_byte(byte_val, method="7bit"):
         return f"{bit1}{bit2}"
     else:
         raise ValueError("Unknown decode method")
+    
+
+def prepare_image_path(original_path):
+
+    MAX_DIM = 3500  # Change this value easily if needed
+
+    ext = os.path.splitext(original_path)[-1].lower()
+    with Image.open(original_path) as img:
+        w, h = img.size
+        needs_conversion = ext in [".jpg", ".jpeg", ".dng"]
+        needs_resize = max(w, h) > MAX_DIM
+
+        if needs_conversion or needs_resize:
+            scale = MAX_DIM / max(w, h) if needs_resize else 1.0
+            new_size = (int(w * scale), int(h * scale)) if needs_resize else (w, h)
+
+            if needs_resize:
+                img = img.resize(new_size, Image.LANCZOS)
+
+            temp_path = "image.png"
+            img.save(temp_path, format="PNG")
+            # print(f"Image processed and saved to {temp_path} with size {new_size}")
+            return temp_path
+        else:
+            return original_path
+
 
 def main(received_filename, image_path=None, use_codebook=False, resolution_args=(None, None), adaptive_override=None):
     # separate_binary_file(received_filename, "patch_coord_received.bin", "image_data_received.bin")
@@ -749,7 +775,9 @@ if __name__ == "__main__":
     codebook_path_adaptive = codebook_paths[key]["adaptive"]
     codebook_path_wo_adaptive = codebook_paths[key]["wo_adaptive"]
 
-    main(arguments.received_file, arguments.image_path, use_codebook, (arguments.res_h, arguments.res_w),arguments.adaptive)
+    processed_path = prepare_image_path(arguments.image_path) if arguments.image_path else None
+
+    main(arguments.received_file, processed_path, use_codebook, (arguments.res_h, arguments.res_w),arguments.adaptive)
 
 
 # python receiver.py --received_file combined_binary.bin --image_path Datasets/Kodak/kodim23.png --use_codebook
