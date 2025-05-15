@@ -1,11 +1,11 @@
 % Set argument values
 receivedFile = 'combined_binary.bin';
-imagePath = './Datasets/Clic2021/06.png';      % Leave '' if you don’t want to save output
-%useCodebook = true;   % true / false
+imagePath = 'Datasets/Kodak/kodim23.png';      % Leave '' if you don’t want to save output
+
 
 useCodebook = '';   % 'true' or 'false' or leave empty '' (Auto detect)
-k = 512;             % Optional, set to [] if not used
-chunk = 4;           % Optional, set to [] if not used
+k = [];             % Optional, set to [] if not used
+chunk = [];           % Optional, set to [] if not used
 adaptive = '';   % 'true' or 'false' or leave empty ''
 resH = [];           % Optional
 resW = [];           % Optional
@@ -57,11 +57,103 @@ else
         adaptiveLabel, reconImageName);
 end
 
-% Display if exists
-% if exist(localReconImage, 'file')
-%     warning('off', 'all');  % Disable MATLAB image size warnings
-%     figure; imshow(imread(localReconImage));
-%     title('Reconstructed Image');
-% else
-%     warning('Reconstructed image file not found.');
-% end
+
+
+
+
+% Extract resolution
+resMatch = regexp(output, 'Resolution read from file:\s*(\d+)x(\d+)', 'tokens');
+if ~isempty(resMatch)
+    resH = str2double(resMatch{1}{1});
+    resW = str2double(resMatch{1}{2});
+    resolutionStr = sprintf('%dx%d', resH, resW);
+else
+    resolutionStr = '';
+end
+
+% Extract metrics only if original image is known
+if ~isempty(imagePath)
+    psnrVal = extract_metric(output, 'PSNR:\s*([\d.]+)');
+    msssimVal = extract_metric(output, 'MS-SSIM:\s*([\d.]+)');
+    lpipsVal = extract_metric(output, 'LPIPS:\s*([\d.]+)');
+    inputSize = extract_metric(output, 'Input Image Size:\s*([\d.]+)');
+    outputSize = extract_metric(output, 'Output Image Size:\s*([\d.]+)');
+    compression = extract_metric(output, 'Compression Ratio:\s*([\d.]+)');
+    binSize = extract_metric(output, 'Reconstructed Binary Size:\s*([\d.]+)');
+else
+    % Estimate binary size
+    if codebookDetected
+        d = chunk;  % chunk size (e.g., 4)
+        num_elements = (resH * resW * 32) / (256 * d);
+        bytes_per_element = 2 * (k > 256) + 1 * (k <= 256);
+        binSize = (num_elements * bytes_per_element) / 1024;  % in KB
+    else
+        binSize = (resH * resW * 32) / 256 / 1024;  % in KB (float vector, no quantization)
+    end
+
+    psnrVal = ''; msssimVal = ''; lpipsVal = '';
+    inputSize = ''; outputSize = ''; compression = '';
+end
+
+
+
+
+
+% Determine if codebook used
+codebookUsed = 'True';
+if ~codebookDetected
+    codebookUsed = 'False';
+    k = '';
+    chunk = '';
+end
+
+% Prepare row
+row = {
+    imageName, localReconImage, ...
+    codebookUsed, chunk, k, adaptiveLabel, ...
+    psnrVal, msssimVal, lpipsVal, ...
+    inputSize, outputSize, binSize, compression
+};
+
+headers = {
+    'ImagePath', 'ReconPath', ...
+    'CodebookUsed', 'd', 'k', 'Adaptive', ...
+    'PSNR', 'MS-SSIM', 'LPIPS', ...
+    'InputSizeKB', 'OutputSizeKB', 'BinarySizeKB', 'CompressionRatio'
+};
+
+resultsFile = 'results_summary.xlsx';
+
+% Load Excel and check for existing path
+if exist(resultsFile, 'file')
+    [~, ~, raw] = xlsread(resultsFile);
+    headers_existing = raw(1, :);
+    data = raw(2:end, :);
+
+    reconCol = find(strcmpi(headers_existing, 'ReconPath'));
+    existingRow = find(strcmpi(localReconImage, data(:, reconCol)));
+
+    if ~isempty(existingRow)
+        rowIndex = existingRow + 1;
+    else
+        rowIndex = size(data, 1) + 2;
+    end
+else
+    % Write headers if new file
+    xlswrite(resultsFile, headers, 1, 'A1');
+    rowIndex = 2;
+end
+
+% Write the row
+cellRange = sprintf('A%d', rowIndex);
+xlswrite(resultsFile, row, 1, cellRange);
+
+% Helper function (keep at the bottom of script)
+function val = extract_metric(txt, pattern)
+    match = regexp(txt, pattern, 'tokens', 'once');
+    if ~isempty(match)
+        val = str2double(match{1});
+    else
+        val = '';
+    end
+end
