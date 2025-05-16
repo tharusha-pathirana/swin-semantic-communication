@@ -16,7 +16,6 @@ k = 512;
 chunk = 4;
 adaptive = '';  % 'true', 'false', or '' (auto mode)
 
-depth = 6;  % or 4/5/6/7 or [] if not set
 
 patch_size = 28;
 low_th = 100;
