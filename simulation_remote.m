@@ -9,12 +9,14 @@ remoteScript = 'sim.py';
 % --- Define arguments ---
 type = 'both';  % 'tx', 'rx', or 'both'
 received_file = './Binary/simulated.bin';
-imagePath = 'Datasets/Kodak/kodim23.png';
+imagePath = 'IMG_3504.JPG';
 
 useCodebook = true;
 k = 512;
 chunk = 4;
 adaptive = '';  % 'true', 'false', or '' (auto mode)
+
+noise = 3.0;
 
 
 patch_size = 28;
