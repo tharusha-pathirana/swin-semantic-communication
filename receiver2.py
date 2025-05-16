@@ -607,7 +607,7 @@ def decode_redundant_byte(byte_val, method="7bit"):
 
 def prepare_image_path(original_path):
 
-    MAX_DIM = 3500  # Change this value easily if needed
+    MAX_DIM = 3000  # Change this value easily if needed
 
     ext = os.path.splitext(original_path)[-1].lower()
     with Image.open(original_path) as img:

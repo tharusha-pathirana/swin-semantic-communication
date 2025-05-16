@@ -313,7 +313,7 @@ def process_and_encode_image_to_binary(image_path, output_path, adaptive_patch_e
 
 def prepare_image_path(original_path):
 
-    MAX_DIM = 3500  # Change this value easily if needed
+    MAX_DIM = 3000  # Change this value easily if needed
 
     ext = os.path.splitext(original_path)[-1].lower()
     with Image.open(original_path) as img:
@@ -357,7 +357,7 @@ def main(image_path, use_codebook=False, adaptive=None):
     depth = round(math.log2(ref_dim / 32))
     depth = min(depth, 7)  # Limit depth to a maximum of 7
 
-    if H_image > 3000 or W_image > 3000: 
+    if H_image > 2500 or W_image > 2500: 
         # depth = 6 
         low_t,high_t = 100,200
         # patch_size = 60
