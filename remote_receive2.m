@@ -201,7 +201,8 @@ if exist(resultsFile, 'file')
     data = raw(2:end, :);
 
     reconCol = find(strcmpi(headers_existing, 'ReconPath'));
-    existingRow = find(strcmpi(localReconImage, data(:, reconCol)));
+    %existingRow = find(strcmpi(localReconImage, data(:, reconCol)));
+    existingRow = find(strcmpi(excelReconPath, data(:, reconCol)));
 
     if ~isempty(existingRow)
         rowIndex = existingRow + 1;
